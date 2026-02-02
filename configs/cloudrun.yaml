@@ -7,15 +7,15 @@ gateway:
   auth:
     mode: token
     # Token is set via OPENCLAW_GATEWAY_TOKEN environment variable
-  # Control UI settings
+  # Control UI settings - allow insecure auth for Cloud Run
   controlUi:
     enabled: true
+    allowInsecureAuth: true
 
 # Pairing settings - auto-approve web channel for Cloud Run
 pairing:
   autoApprove:
     - web
-  # Skip pairing requirement for web channel
   web:
     skipPairing: true
 
