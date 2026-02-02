@@ -50,10 +50,8 @@ ENV NODE_ENV=production
 # Create data directory for persistent storage
 RUN mkdir -p /data/.openclaw && chown -R node:node /data
 
-# Copy Cloud Run configuration to the expected location
-RUN mkdir -p /home/node/.openclaw && \
-  cp configs/cloudrun.yaml /home/node/.openclaw/config.yaml && \
-  chown -R node:node /home/node/.openclaw
+# Make entrypoint script executable
+RUN chmod +x /app/scripts/docker-entrypoint.sh
 
 # Allow non-root user to write temp files during runtime/tests.
 RUN chown -R node:node /app
@@ -61,14 +59,15 @@ RUN chown -R node:node /app
 # Security hardening: Run as non-root user
 USER node
 
-# Set OpenClaw home to the node user's home (config will be read from here)
+# Set OpenClaw home to the mounted volume
 ENV HOME=/home/node
 ENV OPENCLAW_HOME=/data/.openclaw
 
 # Cloud Run injects PORT environment variable (default 8080)
 ENV PORT=8080
 
-# Generate a random token if not provided (will be overridden by env var if set)
-# The --allow-unconfigured flag allows startup without full setup
-# The --token flag uses the OPENCLAW_GATEWAY_TOKEN env var
-CMD node dist/index.js gateway --port $PORT --bind lan --allow-unconfigured --token ${OPENCLAW_GATEWAY_TOKEN:-cloudrun-default-token}
+# Default token (should be overridden by environment variable)
+ENV OPENCLAW_GATEWAY_TOKEN=change-me-in-production
+
+# Use entrypoint script to initialize config and start gateway
+ENTRYPOINT ["/app/scripts/docker-entrypoint.sh"]
