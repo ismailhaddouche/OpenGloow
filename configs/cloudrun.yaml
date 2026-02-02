@@ -1,6 +1,5 @@
 # OpenClaw Cloud Run Configuration
 # This is a minimal config for running in Cloud Run
-# Environment variables override these settings
 
 gateway:
   mode: local
@@ -8,8 +7,18 @@ gateway:
   auth:
     mode: token
     # Token is set via OPENCLAW_GATEWAY_TOKEN environment variable
+  # Control UI settings
+  controlUi:
+    enabled: true
 
-# Use Firestore for session storage (set via OPENCLAW_STORAGE=firestore)
+# Pairing settings - auto-approve web channel for Cloud Run
+pairing:
+  autoApprove:
+    - web
+  # Skip pairing requirement for web channel
+  web:
+    skipPairing: true
+
 # Use Google Gemini as the default provider
 models:
   provider: google
@@ -23,3 +32,12 @@ canvasHost:
 discovery:
   mdns:
     mode: disabled
+
+# Disable channels that need interactive setup
+channels:
+  whatsapp:
+    enabled: false
+  telegram:
+    enabled: false
+  discord:
+    enabled: false
