@@ -8,6 +8,7 @@ REGION="us-central1"
 IMAGE_NAME="gcr.io/$PROJECT_ID/$SERVICE_NAME"
 # Bucket for persistent storage (config, skills, etc.)
 STORAGE_BUCKET="${OPENCLAW_STORAGE_BUCKET:-$PROJECT_ID-openclaw-data}"
+VOLUME_NAME="openclaw-data"
 
 if [ -z "$PROJECT_ID" ]; then
   echo "Error: GOOGLE_CLOUD_PROJECT environment variable is not set."
@@ -31,9 +32,13 @@ echo ""
 echo "📦 Building container image..."
 gcloud builds submit --tag "$IMAGE_NAME" .
 
-# 2. Deploy to Cloud Run with stateful configuration
+# 2. Deploy to Cloud Run with stateful configuration + GCS FUSE volume
 echo ""
-echo "🚀 Deploying service (stateful mode)..."
+echo "🚀 Deploying service (stateful mode with persistent storage)..."
+
+# Note: Cloud Run Gen2 with GCS FUSE volume mounting
+# --add-volume: defines a Cloud Storage volume
+# --add-volume-mount: mounts it inside the container
 gcloud run deploy "$SERVICE_NAME" \
   --image "$IMAGE_NAME" \
   --platform managed \
@@ -45,7 +50,9 @@ gcloud run deploy "$SERVICE_NAME" \
   --max-instances=3 \
   --no-cpu-throttling \
   --execution-environment=gen2 \
-  --set-env-vars="OPENCLAW_STORAGE=firestore,NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,OPENCLAW_DATA_BUCKET=$STORAGE_BUCKET"
+  --add-volume=name=$VOLUME_NAME,type=cloud-storage,bucket=$STORAGE_BUCKET \
+  --add-volume-mount=volume=$VOLUME_NAME,mount-path=/data \
+  --set-env-vars="OPENCLAW_STORAGE=firestore,NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,OPENCLAW_HOME=/data/.openclaw"
 
 echo ""
 echo "✅ Deployment complete!"
@@ -58,4 +65,5 @@ echo "⚠️  IMPORTANT: This deployment uses:"
 echo "   - CPU always allocated (no throttling)"
 echo "   - Minimum 1 instance always running"
 echo "   - 2GB RAM per instance"
+echo "   - GCS bucket mounted at /data for persistent storage"
 echo "   This incurs continuous costs. Monitor billing at: https://console.cloud.google.com/billing"
