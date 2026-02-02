@@ -38,11 +38,11 @@ export function toToolDefinitions(tools: AnyAgentTool[]): ToolDefinition[] {
       description: tool.description ?? "",
       parameters: tool.parameters,
       execute: async (
-        toolCallId,
-        params,
+        toolCallId: string,
+        params: unknown,
+        signal: AbortSignal | undefined,
         onUpdate: AgentToolUpdateCallback<unknown> | undefined,
-        _ctx,
-        signal,
+        _ctx: unknown,
       ): Promise<AgentToolResult<unknown>> => {
         try {
           return await tool.execute(toolCallId, params, signal, onUpdate);
@@ -89,11 +89,11 @@ export function toClientToolDefinitions(
       // oxlint-disable-next-line typescript/no-explicit-any
       parameters: func.parameters as any,
       execute: async (
-        toolCallId,
-        params,
+        toolCallId: string,
+        params: unknown,
+        _signal: AbortSignal | undefined,
         _onUpdate: AgentToolUpdateCallback<unknown> | undefined,
-        _ctx,
-        _signal,
+        _ctx: unknown,
       ): Promise<AgentToolResult<unknown>> => {
         const outcome = await runBeforeToolCallHook({
           toolName: func.name,
