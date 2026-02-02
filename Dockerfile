@@ -61,4 +61,10 @@ USER node
 # Set OpenClaw home to mounted volume
 ENV OPENCLAW_HOME=/data/.openclaw
 
-CMD ["node", "dist/index.js"]
+# Cloud Run injects PORT environment variable (default 8080)
+# We need to start the gateway server listening on that port
+ENV PORT=8080
+
+# Start the gateway server using the PORT environment variable
+# The shell form allows $PORT expansion at runtime
+CMD node dist/index.js gateway --port $PORT --bind lan
