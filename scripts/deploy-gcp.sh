@@ -10,6 +10,9 @@ IMAGE_NAME="gcr.io/$PROJECT_ID/$SERVICE_NAME"
 STORAGE_BUCKET="${OPENCLAW_STORAGE_BUCKET:-$PROJECT_ID-openclaw-data}"
 VOLUME_NAME="openclaw-data"
 
+# Generate a secure gateway token if not provided
+GATEWAY_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)}"
+
 if [ -z "$PROJECT_ID" ]; then
   echo "Error: GOOGLE_CLOUD_PROJECT environment variable is not set."
   echo "Usage: GOOGLE_CLOUD_PROJECT=my-project ./scripts/deploy-gcp.sh"
@@ -21,9 +24,9 @@ echo "Project: $PROJECT_ID"
 echo "Service: $SERVICE_NAME"
 echo "Region:  $REGION"
 echo "Storage: gs://$STORAGE_BUCKET"
+echo ""
 
 # 0. Create storage bucket if it doesn't exist
-echo ""
 echo "📦 Ensuring storage bucket exists..."
 gsutil ls -b "gs://$STORAGE_BUCKET" 2>/dev/null || gsutil mb -l "$REGION" "gs://$STORAGE_BUCKET"
 
@@ -52,13 +55,18 @@ gcloud run deploy "$SERVICE_NAME" \
   --execution-environment=gen2 \
   --add-volume=name=$VOLUME_NAME,type=cloud-storage,bucket=$STORAGE_BUCKET \
   --add-volume-mount=volume=$VOLUME_NAME,mount-path=/data \
-  --set-env-vars="OPENCLAW_STORAGE=firestore,NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,OPENCLAW_HOME=/data/.openclaw"
+  --set-env-vars="OPENCLAW_STORAGE=firestore,NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,OPENCLAW_HOME=/data/.openclaw,OPENCLAW_GATEWAY_TOKEN=$GATEWAY_TOKEN"
 
 echo ""
 echo "✅ Deployment complete!"
 echo ""
 echo "Service URL:"
-gcloud run services describe "$SERVICE_NAME" --platform managed --region "$REGION" --format 'value(status.url)'
+SERVICE_URL=$(gcloud run services describe "$SERVICE_NAME" --platform managed --region "$REGION" --format 'value(status.url)')
+echo "$SERVICE_URL"
+
+echo ""
+echo "🔐 Gateway Token (save this!):"
+echo "   $GATEWAY_TOKEN"
 
 echo ""
 echo "⚠️  IMPORTANT: This deployment uses:"

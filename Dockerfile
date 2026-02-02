@@ -50,21 +50,25 @@ ENV NODE_ENV=production
 # Create data directory for persistent storage
 RUN mkdir -p /data/.openclaw && chown -R node:node /data
 
+# Copy Cloud Run configuration to the expected location
+RUN mkdir -p /home/node/.openclaw && \
+  cp configs/cloudrun.yaml /home/node/.openclaw/config.yaml && \
+  chown -R node:node /home/node/.openclaw
+
 # Allow non-root user to write temp files during runtime/tests.
 RUN chown -R node:node /app
 
 # Security hardening: Run as non-root user
-# The node:22-bookworm image includes a 'node' user (uid 1000)
-# This reduces the attack surface by preventing container escape via root privileges
 USER node
 
-# Set OpenClaw home to mounted volume
+# Set OpenClaw home to the node user's home (config will be read from here)
+ENV HOME=/home/node
 ENV OPENCLAW_HOME=/data/.openclaw
 
 # Cloud Run injects PORT environment variable (default 8080)
-# We need to start the gateway server listening on that port
 ENV PORT=8080
 
-# Start the gateway server using the PORT environment variable
-# The shell form allows $PORT expansion at runtime
-CMD node dist/index.js gateway --port $PORT --bind lan
+# Generate a random token if not provided (will be overridden by env var if set)
+# The --allow-unconfigured flag allows startup without full setup
+# The --token flag uses the OPENCLAW_GATEWAY_TOKEN env var
+CMD node dist/index.js gateway --port $PORT --bind lan --allow-unconfigured --token ${OPENCLAW_GATEWAY_TOKEN:-cloudrun-default-token}

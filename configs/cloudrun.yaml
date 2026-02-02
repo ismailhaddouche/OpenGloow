@@ -1,0 +1,25 @@
+# OpenClaw Cloud Run Configuration
+# This is a minimal config for running in Cloud Run
+# Environment variables override these settings
+
+gateway:
+  mode: local
+  bind: lan
+  auth:
+    mode: token
+    # Token is set via OPENCLAW_GATEWAY_TOKEN environment variable
+
+# Use Firestore for session storage (set via OPENCLAW_STORAGE=firestore)
+# Use Google Gemini as the default provider
+models:
+  provider: google
+  model: gemini-2.5-pro-preview
+
+# Disable features not needed in Cloud Run
+canvasHost:
+  enabled: false
+
+# Skip optional services for faster startup
+discovery:
+  mdns:
+    mode: disabled
