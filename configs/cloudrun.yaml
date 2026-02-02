@@ -12,10 +12,11 @@ gateway:
     enabled: true
     allowInsecureAuth: true
 
-# Pairing settings - auto-approve web channel for Cloud Run
+# Pairing settings - auto-approve all channels for Cloud Run
 pairing:
   autoApprove:
     - web
+    - telegram
   web:
     skipPairing: true
 
@@ -33,11 +34,12 @@ discovery:
   mdns:
     mode: disabled
 
-# Disable channels that need interactive setup
+# Channel configuration
 channels:
-  whatsapp:
-    enabled: false
   telegram:
+    enabled: true
+    # Token from environment variable TELEGRAM_BOT_TOKEN
+  whatsapp:
     enabled: false
   discord:
     enabled: false
