@@ -1,73 +1,125 @@
-# Deployment Guide: Google Cloud Run & Firestore
+# Guía de Despliegue en Google Cloud Run (Modo Stateful)
 
-This guide outlines how to deploy **ClawGcp** (formerly OpenClaw) to Google Cloud Run, operating as a Sovereign AI Agent with persistent state in Firestore.
+Esta guía te permite desplegar **ClawGCP** (OpenClaw) en Google Cloud Run con persistencia de datos y ejecución continua.
 
-## Architecture
+## Prerrequisitos
 
-- **Compute**: Google Cloud Run (Serverless, scales to zero).
-- **Database**: Google Cloud Firestore (Session storage, persistent state).
-- **AI Model**: Google Gemini 1.5 Pro (via Vertex AI or Gemini API).
-- **Authentication**: Application Default Credentials (ADC) for infrastructure; OAuth/API Keys for specific agent tools.
+1. Proyecto creado en [Google Cloud Console](https://console.cloud.google.com/)
+2. **Firestore** activado en modo "Nativo"
+3. **Cloud Run API** habilitada
+4. **Cloud Build API** habilitada
 
-## Prerequisites
+## Arquitectura
 
-1. Google Cloud Project with Billing enabled.
-2. `gcloud` CLI installed and authenticated.
-3. Firestore database created in Native mode.
-4. (Optional) Firebase project linked for specific Firebase features.
-
-## Configuration
-
-Set the following environment variables in your Cloud Run service:
-
-- `OPENCLAW_STORAGE=firestore` (Enables the Firestore session adapter)
-- `GOOGLE_CLOUD_PROJECT=<your-project-id>`
-- `NODE_ENV=production`
-
-### Secrets management
-For API keys (e.g., Twilio, Telegram, Slack), use **Google Secret Manager**:
-
-1. Create a secret in GCP console (e.g., `CLAW_TELEGRAM_TOKEN`).
-2. Grant the Cloud Run service account access to the secret.
-3. Expose the secret as an environment variable in Cloud Run.
-
-## Build and Deploy
-
-### 1. Build the Container
-Using Cloud Build (recommended):
-```bash
-gcloud builds submit --tag gcr.io/PROJECT_ID/clawgcp
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Google Cloud Run (gen2, CPU always allocated)              │
+│  ┌─────────────────────────────────────────────────────────┐│
+│  │  ClawGCP Container                                      ││
+│  │  - Node.js 22                                           ││
+│  │  - Gemini API (LLM)                                     ││
+│  │  - GitHub CLI (gh)                                      ││
+│  └─────────────────────────────────────────────────────────┘│
+│            │                           │                    │
+│            ▼                           ▼                    │
+│  ┌─────────────────┐         ┌─────────────────────────┐   │
+│  │   Firestore     │         │  Cloud Storage (GCS)    │   │
+│  │   (Sessions)    │         │  (Config, Skills, Docs) │   │
+│  └─────────────────┘         └─────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-Or Docker locally:
+## Configuración del Proyecto
+
+1. **Configurar variables de entorno**:
+   ```bash
+   export GOOGLE_CLOUD_PROJECT="gloowgcp"  # Tu ID de proyecto
+   gcloud config set project $GOOGLE_CLOUD_PROJECT
+   ```
+
+2. **Activar APIs necesarias**:
+   ```bash
+   gcloud services enable \
+     run.googleapis.com \
+     cloudbuild.googleapis.com \
+     firestore.googleapis.com \
+     storage.googleapis.com
+   ```
+
+## Despliegue Automático
+
+El script de despliegue creará automáticamente:
+- Un bucket de Cloud Storage para datos persistentes
+- Una imagen Docker en Container Registry
+- Un servicio Cloud Run con CPU siempre activa
+
 ```bash
-docker build -t gcr.io/PROJECT_ID/clawgcp .
-docker push gcr.io/PROJECT_ID/clawgcp
+npm run deploy:gcp
 ```
 
-### 2. Deploy to Cloud Run
-```bash
-gcloud run deploy clawgcp \
-  --image gcr.io/PROJECT_ID/clawgcp \
-  --platform managed \
-  --region us-central1 \
-  --allow-unauthenticated \
-  --set-env-vars OPENCLAW_STORAGE=firestore
+## Variables de Entorno en Cloud Run
+
+El despliegue configura automáticamente:
+
+| Variable | Valor | Descripción |
+|----------|-------|-------------|
+| `OPENCLAW_STORAGE` | `firestore` | Usa Firestore para sesiones |
+| `NODE_ENV` | `production` | Modo producción |
+| `GOOGLE_CLOUD_PROJECT` | Tu proyecto | Para autenticación ADC |
+| `OPENCLAW_DATA_BUCKET` | `{proyecto}-openclaw-data` | Bucket para datos |
+
+## Configuración del Servicio
+
+El servicio se despliega con:
+
+- **CPU**: 1 vCPU (siempre asignada, sin throttling)
+- **RAM**: 2 GB
+- **Instancias mínimas**: 1 (siempre encendida)
+- **Instancias máximas**: 3 (autoescalado)
+- **Entorno**: Gen2 (soporte para FUSE)
+
+## Costes Estimados
+
+⚠️ **Importante**: Este despliegue tiene costes fijos porque mantiene al menos 1 instancia siempre activa.
+
+| Recurso | Coste Aproximado/mes |
+|---------|---------------------|
+| Cloud Run (1 vCPU, 2GB, 24/7) | ~$30-50 USD |
+| Firestore (uso moderado) | ~$1-5 USD |
+| Cloud Storage (10GB) | ~$0.20 USD |
+| **Total estimado** | **~$35-60 USD/mes** |
+
+## Verificación
+
+Después del despliegue, obtendrás una URL tipo:
+```
+https://clawgcp-xxxxx-uc.a.run.app
 ```
 
-*Note: `--allow-unauthenticated` allows public HTTP access (e.g., for Webhooks). If intended for private use only, use `--no-allow-unauthenticated`.*
+Para verificar que funciona:
+```bash
+# Ver logs en tiempo real
+gcloud run services logs read clawgcp --region us-central1 --follow
+```
 
-## Migrating from Legacy OpenClaw
+## Conexión con Canales
 
-### Session Storage
-The application now supports `OPENCLAW_STORAGE=firestore`. This replaces the file-based `sessions.json`. 
-- **New Sessions**: Automatically created in Firestore `sessions` collection.
-- **Legacy Sessions**: To migrate existing JSON sessions, a migration script (to be implemented) would read `sessions.json` and write to Firestore using `persistSession`.
+Una vez desplegado, configura los webhooks de tus canales de mensajería:
 
-### Google Workspace Integrations
-Supported Google Workspace integrations (Docs, Drive, etc.) rely on the configured AI Model (Gemini) having access to these tools via Extensions or separate Auth tokens. Ensure your Service Account or User OAuth token has the necessary scopes (`https://www.googleapis.com/auth/drive`, etc.).
+- **Telegram**: Configura el webhook en `@BotFather` apuntando a tu URL
+- **Slack**: Configura la Event Subscription URL en tu Slack App
+- **Discord**: Configura el Interactions Endpoint URL
 
-## Troubleshooting
+## Rollback
 
-- **Logs**: View logs in Google Cloud Console > Cloud Run > Logs.
-- **Permissions**: Ensure the "Compute Engine default service account" (or your custom SA) has "Cloud Datastore User" role.
+Si necesitas volver a una versión anterior:
+```bash
+gcloud run services update-traffic clawgcp --to-revisions=REVISION_NAME=100 --region=us-central1
+```
+
+## Eliminar el Servicio
+
+```bash
+gcloud run services delete clawgcp --region=us-central1
+gsutil rm -r gs://$GOOGLE_CLOUD_PROJECT-openclaw-data
+```

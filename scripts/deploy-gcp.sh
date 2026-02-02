@@ -6,6 +6,8 @@ PROJECT_ID=${GOOGLE_CLOUD_PROJECT:-""}
 SERVICE_NAME="clawgcp"
 REGION="us-central1"
 IMAGE_NAME="gcr.io/$PROJECT_ID/$SERVICE_NAME"
+# Bucket for persistent storage (config, skills, etc.)
+STORAGE_BUCKET="${OPENCLAW_STORAGE_BUCKET:-$PROJECT_ID-openclaw-data}"
 
 if [ -z "$PROJECT_ID" ]; then
   echo "Error: GOOGLE_CLOUD_PROJECT environment variable is not set."
@@ -17,23 +19,43 @@ echo "🚀 Deploying ClawGCP to Google Cloud Run..."
 echo "Project: $PROJECT_ID"
 echo "Service: $SERVICE_NAME"
 echo "Region:  $REGION"
+echo "Storage: gs://$STORAGE_BUCKET"
+
+# 0. Create storage bucket if it doesn't exist
+echo ""
+echo "📦 Ensuring storage bucket exists..."
+gsutil ls -b "gs://$STORAGE_BUCKET" 2>/dev/null || gsutil mb -l "$REGION" "gs://$STORAGE_BUCKET"
 
 # 1. Build and Submit Image to Container Registry
 echo ""
 echo "📦 Building container image..."
 gcloud builds submit --tag "$IMAGE_NAME" .
 
-# 2. Deploy to Cloud Run
+# 2. Deploy to Cloud Run with stateful configuration
 echo ""
-echo "🚀 Deploying service..."
+echo "🚀 Deploying service (stateful mode)..."
 gcloud run deploy "$SERVICE_NAME" \
   --image "$IMAGE_NAME" \
   --platform managed \
   --region "$REGION" \
   --allow-unauthenticated \
-  --set-env-vars="OPENCLAW_STORAGE=firestore,NODE_ENV=production"
+  --memory=2Gi \
+  --cpu=1 \
+  --min-instances=1 \
+  --max-instances=3 \
+  --no-cpu-throttling \
+  --execution-environment=gen2 \
+  --set-env-vars="OPENCLAW_STORAGE=firestore,NODE_ENV=production,GOOGLE_CLOUD_PROJECT=$PROJECT_ID,OPENCLAW_DATA_BUCKET=$STORAGE_BUCKET"
 
 echo ""
 echo "✅ Deployment complete!"
+echo ""
 echo "Service URL:"
 gcloud run services describe "$SERVICE_NAME" --platform managed --region "$REGION" --format 'value(status.url)'
+
+echo ""
+echo "⚠️  IMPORTANT: This deployment uses:"
+echo "   - CPU always allocated (no throttling)"
+echo "   - Minimum 1 instance always running"
+echo "   - 2GB RAM per instance"
+echo "   This incurs continuous costs. Monitor billing at: https://console.cloud.google.com/billing"
