@@ -441,11 +441,11 @@ export async function updateLastRoute(params: {
     });
     const metaPatch = ctx
       ? deriveSessionMetaPatch({
-          ctx,
-          sessionKey,
-          existing,
-          groupResolution: params.groupResolution,
-        })
+        ctx,
+        sessionKey,
+        existing,
+        groupResolution: params.groupResolution,
+      })
       : null;
     const basePatch: Partial<SessionEntry> = {
       updatedAt: Math.max(existing?.updatedAt ?? 0, now),
@@ -462,5 +462,58 @@ export async function updateLastRoute(params: {
     store[sessionKey] = next;
     await saveSessionStoreUnlocked(storePath, store);
     return next;
+  });
+}
+
+// ============================================================================
+// Async Session Access (Firestore Support)
+// ============================================================================
+
+export async function fetchSession(params: {
+  key: string;
+  storePath: string;
+}): Promise<SessionEntry | null> {
+  const mode = process.env.OPENCLAW_STORAGE || "filesystem";
+
+  if (mode === "firestore") {
+    try {
+      // Dynamic import to avoid build errors if firebase-admin is not installed
+      const { ensureFirestore } = await import("../../infra/firestore.js");
+      const db = ensureFirestore();
+      // Assume "sessions" collection, using the key as document ID
+      const doc = await db.collection("sessions").doc(params.key).get();
+      if (!doc.exists) {
+        return null;
+      }
+      return doc.data() as SessionEntry;
+    } catch (err) {
+      console.error("[openclaw] Firestore fetch failed:", err);
+      throw err;
+    }
+  }
+
+  // Filesystem fallback (Synchronous load wrapped in promise)
+  const store = loadSessionStore(params.storePath);
+  return store[params.key] ?? null;
+}
+
+export async function persistSession(params: {
+  key: string;
+  entry: SessionEntry;
+  storePath: string;
+}): Promise<void> {
+  const mode = process.env.OPENCLAW_STORAGE || "filesystem";
+
+  if (mode === "firestore") {
+    const { ensureFirestore } = await import("../../infra/firestore.js");
+    const db = ensureFirestore();
+    await db.collection("sessions").doc(params.key).set(params.entry, { merge: true });
+    return;
+  }
+
+  // Filesystem fallback
+  await updateSessionStore(params.storePath, (store) => {
+    store[params.key] = params.entry;
+    return;
   });
 }

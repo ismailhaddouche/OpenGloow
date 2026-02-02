@@ -32,9 +32,9 @@ export function applyGoogleGeminiModelDefault(cfg: OpenClawConfig): {
           model:
             cfg.agents?.defaults?.model && typeof cfg.agents.defaults.model === "object"
               ? {
-                  ...cfg.agents.defaults.model,
-                  primary: GOOGLE_GEMINI_DEFAULT_MODEL,
-                }
+                ...cfg.agents.defaults.model,
+                primary: GOOGLE_GEMINI_DEFAULT_MODEL,
+              }
               : { primary: GOOGLE_GEMINI_DEFAULT_MODEL },
         },
       },
